@@ -20,15 +20,56 @@
 PHP_FUNCTION(mysqli_canonicalize_literals)
 {
     zend_string *query;
-    zend_string *retval;
 
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_STR(query)
     ZEND_PARSE_PARAMETERS_END();
 
-    retval = strpprintf(0, "%s", ZSTR_VAL(query));
+    const char *src = ZSTR_VAL(query);
+    size_t len = ZSTR_LEN(query);
 
-    RETURN_STR(retval);
+    // Allocate output buffer at max input size
+    zend_string *out = zend_string_alloc(len, 0);
+    char *dst = ZSTR_VAL(out);
+
+    size_t i = 0, j = 0;
+    int quote = 0;
+
+    while (i < len) {
+        char c = src[i];
+
+        if (!quote && (c == '"' || c == '\'')) {
+            // Start of quoted string -> write placeholder
+            quote = c;
+            dst[j++] = '?';
+            i++;
+
+            // Skip until closing quote (handle escapes)
+            while (i < len) {
+                if (src[i] == '\\') {
+                    i += 2; // escaped char, skip both
+                } else if (src[i] == quote) {
+                    i++;    // skip closing quote
+                    break;
+                } else {
+                    i++;
+                }
+            }
+
+            quote = 0;
+        } else {
+            // Copy normal characters
+            dst[j++] = c;
+            i++;
+        }
+    }
+
+
+    // Finalize zend_string length
+    ZSTR_VAL(out)[j] = '\0';
+    ZSTR_LEN(out) = j;
+
+    RETURN_STR(out);
 }
 /* }}}*/
 
