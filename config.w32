@@ -1,0 +1,7 @@
+ARG_ENABLE('mysqli_analytics', 'mysqli_analytics support', 'no');
+
+if (PHP_MYSQLI_ANALYTICS != 'no') {
+	AC_DEFINE('HAVE_MYSQLI_ANALYTICS', 1, "Define to 1 if the PHP extension 'mysqli_analytics' is available.");
+
+	EXTENSION('mysqli_analytics', 'mysqli_analytics.c', null, '/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1');
+}

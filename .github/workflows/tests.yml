@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron: '30 5 * * 1'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: PHP ${{ matrix.php-version }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4']
+        experimental: [ false ]
+        include:
+          - php-version: '8.5'
+            experimental: true
+          - php-version: '8.6'
+            experimental: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: phpize
+          coverage: none
+
+      - name: Install valgrind
+        run: sudo apt-get install -y valgrind
+
+      - name: PHPize source
+        run: phpize
+
+      - name: Configure source
+        run: ./configure
+
+      - name: Make
+        run: make
+
+      - name: Make test
+        env:
+            REPORT_EXIT_STATUS: 1
+            TEST_PHP_ARGS: "-m -q --show-diff"
+        run: make test
