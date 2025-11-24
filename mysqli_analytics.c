@@ -122,19 +122,35 @@ static zend_string *canonicalize_literals(zend_string *query)
             continue;
         }
 
-        // Hexadecimal literals
-        if (!inside_backtick_identifier &&
-            ((*input_ptr == '0' && input_ptr + 1 < input_end && (input_ptr[1] == 'x' || input_ptr[1] == 'X')) ||
-             (*input_ptr == 'X' && input_ptr + 1 < input_end && input_ptr[1] == '\'')))
-        {
-            *output_ptr++ = '?';
-            input_ptr++;
+        // Hexadecimal literals (0x..., X'...', x'...')
+        if (!inside_backtick_identifier) {
+            if ((*input_ptr == '0' && input_ptr + 1 < input_end && (input_ptr[1] == 'x' || input_ptr[1] == 'X'))) {
+                // 0xFF style
+                *output_ptr++ = '?';
+                input_ptr += 2; // skip 0x
 
-            while (input_ptr < input_end && (isalnum(*input_ptr) || *input_ptr == '\'')) {
-                input_ptr++;
+                while (input_ptr < input_end && isxdigit(*input_ptr)) {
+                    input_ptr++;
+                }
+
+                continue;
             }
+            if ((input_ptr[0] == 'X' || input_ptr[0] == 'x') && input_ptr + 1 < input_end && input_ptr[1] == '\'') {
+                // X'...' or x'...' style
+                *output_ptr++ = '?';
+                input_ptr += 2; // skip X'
 
-            continue;
+                while (input_ptr < input_end && *input_ptr != '\'') {
+                    input_ptr++;
+                }
+
+                if (input_ptr < input_end) {
+                    // skip closing '
+                    input_ptr++;
+                }
+
+                continue;
+            }
         }
 
         // Numeric literals
