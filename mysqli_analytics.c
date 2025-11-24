@@ -158,24 +158,27 @@ static zend_string *canonicalize_literals(zend_string *query)
             const unsigned char *number_start = input_ptr;
             bool has_digits = false;
 
+            // optional leading minus
             if (*input_ptr == '-') {
                 input_ptr++;
             }
 
+            // integer part
             while (input_ptr < input_end && isdigit(*input_ptr)) {
                 has_digits = true;
                 input_ptr++;
             }
 
+            // fractional part
             if (input_ptr < input_end && *input_ptr == '.') {
                 input_ptr++;
-
                 while (input_ptr < input_end && isdigit(*input_ptr)) {
                     has_digits = true;
                     input_ptr++;
                 }
             }
 
+            // scientific notation
             if (input_ptr < input_end && (*input_ptr == 'e' || *input_ptr == 'E')) {
                 const unsigned char *exp_ptr = input_ptr + 1;
 
@@ -195,10 +198,17 @@ static zend_string *canonicalize_literals(zend_string *query)
             }
 
             if (has_digits) {
-                *output_ptr++ = '?';
-                continue;
-            }
-            else {
+                // check if number is part of identifier (letters or underscore adjacent)
+                unsigned char prev_char = (output_ptr > output_buffer) ? *(output_ptr - 1) : ' ';
+                unsigned char next_char = (input_ptr < input_end) ? *input_ptr : ' ';
+
+                if (!isalnum(prev_char) && prev_char != '_' && !isalnum(next_char) && next_char != '_') {
+                    *output_ptr++ = '?';
+                    continue;
+                } else {
+                    input_ptr = number_start; // treat as identifier
+                }
+            } else {
                 input_ptr = number_start;
             }
         }
@@ -223,6 +233,7 @@ static zend_string *canonicalize_literals(zend_string *query)
     }
 
     *output_ptr = '\0';
+
     return zend_string_init((char*)output_buffer, output_ptr - output_buffer, 0);
 }
 
