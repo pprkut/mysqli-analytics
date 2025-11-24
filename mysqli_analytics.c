@@ -219,10 +219,73 @@ static zend_string *canonicalize_literals(zend_string *query)
              (input_ptr + 3 < input_end && strncasecmp((const char*)input_ptr, "TRUE", 4) == 0) ||
              (input_ptr + 4 < input_end && strncasecmp((const char*)input_ptr, "FALSE", 5) == 0)))
         {
-            *output_ptr++ = '?';
+            bool preceded_by_is_or_is_not = false;
+            const unsigned char *ptr = output_ptr - 1;
+            char *tokens[2] = {NULL, NULL};
+            size_t token_lens[2] = {0,0};
+            int t = 0;
 
-            while (input_ptr < input_end && (isalnum(*input_ptr) || *input_ptr == '_')) {
-                input_ptr++;
+            // Collect last two significant tokens
+            while (t < 2 && ptr >= output_buffer) {
+                while (ptr >= output_buffer && isspace(*ptr)) {
+                    ptr--;
+                }
+
+                if (ptr < output_buffer) {
+                    break;
+                }
+
+                if (*ptr == '`' || *ptr == '.' || *ptr == '(' || *ptr == ')' || *ptr == ',') {
+                    ptr--;
+                    continue;
+                }
+
+                const unsigned char *word_end = ptr;
+
+                while (ptr >= output_buffer && (isalnum(*ptr) || *ptr == '_')) {
+                    ptr--;
+                }
+
+                size_t len = word_end - ptr;
+
+                if (len > 0) {
+                    tokens[t] = (char*)(ptr + 1);
+                    token_lens[t] = len;
+                    t++;
+                }
+            }
+
+            if (t >= 1 && token_lens[0] == 2 && strncasecmp(tokens[0], "IS", 2) == 0) {
+                preceded_by_is_or_is_not = true;
+            }
+            else if (t >= 2 &&
+                     token_lens[1] == 2 && strncasecmp(tokens[1], "IS", 2) == 0 &&
+                     token_lens[0] == 3 && strncasecmp(tokens[0], "NOT", 3) == 0) {
+                preceded_by_is_or_is_not = true;
+            }
+
+            if (preceded_by_is_or_is_not) {
+                // Copy token literally
+                size_t token_len = 0;
+                if (strncasecmp((const char*)input_ptr, "NULL", 4) == 0) {
+                    token_len = 4;
+                }
+                else if (strncasecmp((const char*)input_ptr, "TRUE", 4) == 0) {
+                    token_len = 4;
+                }
+                else if (strncasecmp((const char*)input_ptr, "FALSE", 5) == 0) {
+                    token_len = 5;
+                }
+
+                for (size_t i = 0; i < token_len; i++) {
+                    *output_ptr++ = *input_ptr++;
+                }
+            } else {
+                *output_ptr++ = '?';
+
+                while (input_ptr < input_end && (isalnum(*input_ptr) || *input_ptr == '_')) {
+                    input_ptr++;
+                }
             }
 
             continue;
