@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package version="2.0" xmlns="http://pear.php.net/dtd/package-2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pear.php.net/dtd/package-2.0 http://pear.php.net/dtd/package-2.0.xsd">
+    <name>mysqli_analytics</name>
+    <channel>pecl.php.net</channel>
+    <summary>PHP MySQLi Analytics Helpers</summary>
+    <description>
+        The mysqli_analytics extension provides functions that can help with query analytics.
+    </description>
+    <lead>
+        <name>Heinz Wiesinger</name>
+        <user>pprkut</user>
+        <email>pprkut@liwjatan.org</email>
+        <active>yes</active>
+    </lead>
+    <date>2025-11-24</date>
+    <version>
+        <release>0.1.0</release>
+        <api>1.0</api>
+    </version>
+    <stability>
+        <release>stable</release>
+        <api>stable</api>
+    </stability>
+    <license uri="https://raw.githubusercontent.com/pprkut/autoload-psr/refs/heads/master/LICENSE">PHP License</license>
+    <notes>
+- Fix package.xml
+    </notes>
+    <contents>
+        <dir name="/">
+            <!-- Main source and headers -->
+            <file role="src" name="mysqli_analytics.c"/>
+            <file role="src" name="mysqli_analytics_arginfo.h"/>
+            <file role="src" name="php_mysqli_analytics.h"/>
+            <file role="src" name="composer.json"/>
+            <file role="src" name="config.m4"/>
+            <file role="src" name="config.w32"/>
+            <!-- Docs -->
+            <file role="doc" name="LICENSE"/>
+            <file role="doc" name="README.md"/>
+            <!-- Test runner -->
+            <file name="tests/mysqli-analytics-registered.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-binary.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-charset.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-delete.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-float.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-hexadecimal.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-insert-unescaped.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-insert.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-select-unescaped.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-select-where-false.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-select-where-null.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-select-where-true.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-select-where-unknown.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-select.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-update.phpt" role="test"/>
+            <file name="tests/mysqli_canonicalize_literals-upsert.phpt" role="test"/>
+            <!-- Test data files -->
+            <file name="tests/fixtures/binary-literals.sql" role="test"/>
+            <file name="tests/fixtures/charset-literals.sql" role="test"/>
+            <file name="tests/fixtures/delete.sql" role="test"/>
+            <file name="tests/fixtures/float-literals.sql" role="test"/>
+            <file name="tests/fixtures/hexadecimal-literals.sql" role="test"/>
+            <file name="tests/fixtures/insert-unescaped.sql" role="test"/>
+            <file name="tests/fixtures/insert.sql" role="test"/>
+            <file name="tests/fixtures/select-unescaped.sql" role="test"/>
+            <file name="tests/fixtures/select-where-false.sql" role="test"/>
+            <file name="tests/fixtures/select-where-null.sql" role="test"/>
+            <file name="tests/fixtures/select-where-true.sql" role="test"/>
+            <file name="tests/fixtures/select-where-unknown.sql" role="test"/>
+            <file name="tests/fixtures/select.sql" role="test"/>
+            <file name="tests/fixtures/update.sql" role="test"/>
+            <file name="tests/fixtures/upsert.sql" role="test"/>
+        </dir>
+    </contents>
+    <dependencies>
+        <required>
+            <php>
+                <min>8.1.0</min>
+            </php>
+            <pearinstaller>
+                <min>1.10.0</min>
+            </pearinstaller>
+        </required>
+    </dependencies>
+    <providesextension>mysqli_analytics</providesextension>
+    <extsrcrelease/>
+</package>

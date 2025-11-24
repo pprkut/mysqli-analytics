@@ -1,0 +1,6 @@
+{
+    "name": "pprkut/mysqli-analytics",
+    "php-ext": {
+        "extension-name": "mysqli_analytics"
+    }
+}
