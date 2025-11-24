@@ -88,38 +88,79 @@ static zend_string *canonicalize_literals(zend_string *query)
             continue;
         }
 
-        // String literals
+        // String literals with optional _charset
         if (!inside_backtick_identifier &&
             (current_char == '\'' || current_char == '"' ||
-             ((input_ptr + 5 < input_end && strncasecmp((const char*)input_ptr, "_utf8", 5) == 0 && input_ptr[5] == '\'') ||
-              ((input_ptr + 1 < input_end && (*input_ptr == 'N' || *input_ptr == 'n') && input_ptr[1] == '\'')))))
+             (*input_ptr == '_' && input_ptr + 1 < input_end && isalpha(input_ptr[1])) ||
+             ((*input_ptr == 'N' || *input_ptr == 'n') && input_ptr + 1 < input_end && input_ptr[1] == '\'')))
         {
-            unsigned char quote_char;
+            unsigned char quote_char = 0;
 
-            if (strncasecmp((const char*)input_ptr, "_utf8", 5) == 0 && input_ptr[5] == '\'') {
-                input_ptr += 5;
-            }
-            else if ((*input_ptr == 'N' || *input_ptr == 'n') && input_ptr[1] == '\'') {
-                input_ptr += 1;
-            }
 
-            quote_char = *input_ptr++;
+            // Simplified _charset handling: only if immediately followed by quote
+            if (*input_ptr == '_' && input_ptr + 1 < input_end && isalpha(input_ptr[1])) {
+                const unsigned char *p = input_ptr + 1;
 
-            *output_ptr++ = '?';
-
-            while (input_ptr < input_end) {
-                if (*input_ptr == '\\') {
-                    input_ptr += 2;
+                while (p < input_end && (isalnum(*p) || *p == '_')) {
+                    p++;
                 }
-                else if (*input_ptr == quote_char) {
-                    input_ptr++; break;
-                }
-                else {
-                    input_ptr++;
+
+                if (p < input_end && (*p == '\'' || *p == '"')) {
+                    // immediate quote: _charset'...' -> replace content
+                    while (input_ptr < p) {
+                        // copy _charset
+                        *output_ptr++ = *input_ptr++;
+                    }
+
+                    quote_char = *input_ptr++;
+                    *output_ptr++ = '?';
+
+                    while (input_ptr < input_end) {
+                        if (*input_ptr == '\\') {
+                            input_ptr += 2;
+                        }
+                        else if (*input_ptr == quote_char) {
+                            input_ptr++; break;
+                        }
+                        else {
+                            input_ptr++;
+                        }
+                    }
+
+                    continue;
+                } else {
+                    // anything else: copy _charset literally
+                    while (input_ptr < p) {
+                        *output_ptr++ = *input_ptr++;
+                    }
+
+                    continue;
                 }
             }
 
-            continue;
+            // N'...' syntax
+            if (quote_char == 0) {
+                if ((*input_ptr == 'N' || *input_ptr == 'n') && input_ptr + 1 < input_end && input_ptr[1] == '\'') {
+                    *output_ptr++ = *input_ptr++;
+                    quote_char = *input_ptr++;
+                } else if (*input_ptr == '\'' || *input_ptr == '"') {
+                    quote_char = *input_ptr++;
+                }
+                *output_ptr++ = '?';
+                while (input_ptr < input_end) {
+                    if (*input_ptr == '\\') {
+                        input_ptr += 2;
+                    }
+                    else if (*input_ptr == quote_char) {
+                        input_ptr++; break;
+                    }
+                    else {
+                        input_ptr++;
+                    }
+                }
+
+                continue;
+            }
         }
 
         // Hexadecimal literals (0x..., X'...', x'...')
