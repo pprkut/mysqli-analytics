@@ -194,6 +194,52 @@ static zend_string *canonicalize_literals(zend_string *query)
             }
         }
 
+        // 0b binary integer literal (lowercase only)
+        if (!inside_backtick_identifier &&
+            *input_ptr == '0' && input_ptr + 1 < input_end &&
+            input_ptr[1] == 'b')
+        {
+            *output_ptr++ = '?';
+            input_ptr += 2; // skip 0b
+
+            while (input_ptr < input_end && (*input_ptr == '0' || *input_ptr == '1')) {
+                input_ptr++;
+            }
+
+            continue;
+        }
+
+        // b'...' or B'...' bit string literal
+        if (!inside_backtick_identifier &&
+            (*input_ptr == 'b' || *input_ptr == 'B') &&
+            input_ptr + 1 < input_end &&
+            (input_ptr[1] == '\'' || input_ptr[1] == '"'))
+        {
+            unsigned char quote_char = input_ptr[1];
+
+            // canonicalize as a single ?
+            *output_ptr++ = '?';
+
+            // skip b/B and opening quote
+            input_ptr += 2;
+
+            // skip contents
+            while (input_ptr < input_end) {
+                if (*input_ptr == '\\') {
+                    input_ptr += 2;
+                }
+                else if (*input_ptr == quote_char) {
+                    input_ptr++;
+                    break;
+                }
+                else {
+                    input_ptr++;
+                }
+            }
+
+            continue;
+        }
+
         // Numeric literals
         if (!inside_backtick_identifier && (*input_ptr == '-' || isdigit(*input_ptr) || *input_ptr == '.')) {
             const unsigned char *number_start = input_ptr;
