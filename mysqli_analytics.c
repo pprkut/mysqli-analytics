@@ -16,6 +16,29 @@
     ZEND_PARSE_PARAMETERS_END()
 #endif
 
+static inline const unsigned char *
+skip_quoted_literal(const unsigned char *p, const unsigned char *end, unsigned char quote_char)
+{
+    while (p < end) {
+        if (*p == '\\') {
+            // Skip backslash + next char, if present
+            p++;
+            if (p < end) {
+                p++;
+            }
+        }
+        else if (*p == quote_char) {
+            // Consume closing quote and stop
+            p++;
+            break;
+        }
+        else {
+            p++;
+        }
+    }
+    return p;
+}
+
 static zend_string *canonicalize_literals(zend_string *query)
 {
     const unsigned char *input_ptr = (const unsigned char*)ZSTR_VAL(query);
@@ -114,18 +137,7 @@ static zend_string *canonicalize_literals(zend_string *query)
 
                     quote_char = *input_ptr++;
                     *output_ptr++ = '?';
-
-                    while (input_ptr < input_end) {
-                        if (*input_ptr == '\\') {
-                            input_ptr += 2;
-                        }
-                        else if (*input_ptr == quote_char) {
-                            input_ptr++; break;
-                        }
-                        else {
-                            input_ptr++;
-                        }
-                    }
+                    input_ptr = skip_quoted_literal(input_ptr, input_end, quote_char);
 
                     continue;
                 } else {
@@ -147,17 +159,7 @@ static zend_string *canonicalize_literals(zend_string *query)
                     quote_char = *input_ptr++;
                 }
                 *output_ptr++ = '?';
-                while (input_ptr < input_end) {
-                    if (*input_ptr == '\\') {
-                        input_ptr += 2;
-                    }
-                    else if (*input_ptr == quote_char) {
-                        input_ptr++; break;
-                    }
-                    else {
-                        input_ptr++;
-                    }
-                }
+                input_ptr = skip_quoted_literal(input_ptr, input_end, quote_char);
 
                 continue;
             }
@@ -224,18 +226,7 @@ static zend_string *canonicalize_literals(zend_string *query)
             input_ptr += 2;
 
             // skip contents
-            while (input_ptr < input_end) {
-                if (*input_ptr == '\\') {
-                    input_ptr += 2;
-                }
-                else if (*input_ptr == quote_char) {
-                    input_ptr++;
-                    break;
-                }
-                else {
-                    input_ptr++;
-                }
-            }
+            input_ptr = skip_quoted_literal(input_ptr, input_end, quote_char);
 
             continue;
         }
