@@ -9,4 +9,4 @@ echo mysqli_canonicalize_literals(file_get_contents(__DIR__ . '/fixtures/update.
 --EXPECT--
 UPDATE `database`.`table`
 SET `content` = ?, `language` = ?
-    WHERE `identifier` = ? AND `id` = 2;
+    WHERE `identifier` = ? AND `id` = ?;

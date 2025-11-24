@@ -7,7 +7,7 @@ mysqli_analytics
 echo mysqli_canonicalize_literals(file_get_contents(__DIR__ . '/fixtures/select.sql'));
 ?>
 --EXPECT--
-SELECT `c`.`identifier`,`c`.`language`,`c`.`language`,`fb`.`identifier`,COALESCE(NULL,1) as ?
+SELECT `c`.`identifier`,`c`.`language`,`c`.`language`,`fb`.`identifier`,COALESCE(?,?) as ?
 from `table` as `c`
          left join `bookmarks` fb on `c`.`identifier` = `fb`.`identifier`
 where `c`.`identifier` = ?;

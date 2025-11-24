@@ -8,8 +8,8 @@ echo mysqli_canonicalize_literals(file_get_contents(__DIR__ . '/fixtures/insert.
 ?>
 --EXPECT--
 INSERT INTO `database`.`table` (`param1`, `param2`, `param3`) VALUES
-    (1, ?, ?),
-    (2, ?, ?),
-    (3, ?, ?),
-    (4, ?, ?),
-    (5, ?, ?);
+    (?, ?, ?),
+    (?, ?, ?),
+    (?, ?, ?),
+    (?, ?, ?),
+    (?, ?, ?);
