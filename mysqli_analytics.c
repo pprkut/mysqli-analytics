@@ -16,6 +16,11 @@
     ZEND_PARSE_PARAMETERS_END()
 #endif
 
+typedef struct {
+    const unsigned char *prefix_end;  // points at start of literal content
+    const unsigned char *literal_end; // points past end of literal
+} literal_pos;
+
 static inline const unsigned char*
 skip_quoted_literal(const unsigned char *ptr, const unsigned char *end, unsigned char quote)
 {
@@ -38,55 +43,76 @@ skip_quoted_literal(const unsigned char *ptr, const unsigned char *end, unsigned
     return end;
 }
 
-static inline const unsigned char*
+/* Detect and skip string/binary/hex literals, with optional prefix */
+static inline literal_pos
 skip_prefixed_literal(const unsigned char *ptr, const unsigned char *end)
 {
-    // _charset or N/n prefix handling
-    if (*ptr == '_' && ptr + 1 < end && isalpha(ptr[1])) {
-        const unsigned char *p = ptr + 1;
+    literal_pos lit = { NULL, NULL };
 
-        while (p < end && (isalnum(*p) || *p == '_')) {
-            // consume charset name
-            p++;
-        }
-
-        if (p < end && (*p == '\'' || *p == '"')) {
-            return skip_quoted_literal(p, end, *p); // skip quoted content only
-        }
-
-        return ptr; // not a literal, just copy prefix
+    if (ptr >= end) {
+        return lit;
     }
 
-    if ((*ptr == 'N' || *ptr == 'n') && ptr + 1 < end && ptr[1] == '\'') {
-        return skip_quoted_literal(ptr + 1, end, '\''); // skip quoted content
+    const unsigned char *p = ptr;
+
+    // _charset
+    if (*p == '_' && p + 1 < end && isalpha(p[1])) {
+        const unsigned char *start_prefix = p;
+        p++;
+        while (p < end && (isalnum(*p) || *p == '_')) p++; // charset
+        if (p < end && (*p == '\'' || *p == '"')) {
+            lit.prefix_end = p;        // preserve _charset
+            lit.literal_end = skip_quoted_literal(p, end, *p);
+            return lit;
+        }
+    }
+
+    // N'...' prefix
+    if ((*p == 'N' || *p == 'n') && p + 1 < end && p[1] == '\'') {
+        lit.prefix_end = p + 1;       // preserve N
+        lit.literal_end = skip_quoted_literal(p + 1, end, '\'');
+        return lit;
     }
 
     // Normal quoted string
-    if (*ptr == '\'' || *ptr == '"') {
-        return skip_quoted_literal(ptr, end, *ptr);
+    if (*p == '\'' || *p == '"') {
+        lit.prefix_end = ptr;   // do not preserve quote for ?
+        lit.literal_end = skip_quoted_literal(p, end, *p);
+        return lit;
     }
 
-    // 4. Hex literals (0xFF or X'...'/x'...')
-    if (*ptr == '0' && ptr + 1 < end && (ptr[1] == 'x' || ptr[1] == 'X')) {
-        ptr += 2;
+    // Hex literals (X'...'/x'...')
+    if ((*p == 'X' || *p == 'x') && p + 1 < end && p[1] == '\'') {
+        lit.prefix_end = ptr;   // don't preserve X
+        lit.literal_end = skip_quoted_literal(p + 1, end, '\'');
+        return lit;
+    }
 
-        while (ptr < end && isxdigit(*ptr)) {
-            ptr++;
+    // Hex literals (0xFF)
+    if (*p == '0' && p + 1 < end && (p[1] == 'x' || p[1] == 'X')) {
+        p += 2;
+        const unsigned char *start = p;
+
+        while (p < end && isxdigit(*p)) {
+            p++;
         }
 
-        return ptr;
+        if (p > start) {
+            lit.prefix_end = ptr; // don't preserve 0x
+            lit.literal_end = p;
+            return lit;
+        }
     }
 
-    if ((*ptr == 'X' || *ptr == 'x') && ptr + 1 < end && ptr[1] == '\'') {
-        return skip_quoted_literal(ptr + 1, end, '\'');
+    // Bit string literals b'...' or B'...'
+    if ((*p == 'b' || *p == 'B') && p + 1 < end && (p[1] == '\'' || p[1] == '"')) {
+        lit.prefix_end = ptr;   // don't preserve b/B
+        lit.literal_end = skip_quoted_literal(p + 1, end, p[1]);
+        return lit;
     }
 
-    // 5. Bit string literals b'...' or B'...'
-    if ((*ptr == 'b' || *ptr == 'B') && ptr + 1 < end && (ptr[1] == '\'' || ptr[1] == '"')) {
-        return skip_quoted_literal(ptr + 1, end, ptr[1]);
-    }
-
-    return ptr; // not a quoted literal
+    // not a literal
+    return lit;
 }
 
 static zend_string *canonicalize_literals(zend_string *query)
@@ -162,21 +188,21 @@ static zend_string *canonicalize_literals(zend_string *query)
         }
 
         // String literals with optional _charset, hex literals or binary literals starting with b or B
-        const unsigned char *new_ptr = (!inside_backtick_identifier) ? skip_prefixed_literal(input_ptr, input_end) : input_ptr;
-        if (new_ptr != input_ptr) {
-            // If prefix exists, copy everything up to the quote (but not the quote content)
-            const unsigned char *p = input_ptr;
-
-            // Copy prefix (if any)
-            if (*p == '_' || *p == 'N' || *p == 'n') {
-                while (p < new_ptr && *p != '\'' && *p != '"') {
-                    *output_ptr++ = *p++;
+        if (!inside_backtick_identifier) {
+            literal_pos lit = skip_prefixed_literal(input_ptr, input_end);
+            if (lit.literal_end != NULL) {
+                // If it has a _charset or N prefix, preserve prefix
+                if (lit.prefix_end != input_ptr) {
+                    for (const unsigned char *p = input_ptr; p < lit.prefix_end; p++) {
+                        *output_ptr++ = *p;
+                    }
                 }
-            }
 
-            *output_ptr++ = '?'; // replace literal content
-            input_ptr = new_ptr; // advance pointer past literal
-            continue;
+                // Replace literal content with ?
+                *output_ptr++ = '?';
+                input_ptr = lit.literal_end;
+                continue;
+            }
         }
 
         // 0b binary integer literal (lowercase only)
