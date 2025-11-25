@@ -280,82 +280,95 @@ static zend_string *canonicalize_literals(zend_string *query)
             }
         }
 
-        // Boolean / NULL
-        if (!inside_backtick_identifier &&
-            ((input_ptr + 3 < input_end && strncasecmp((const char*)input_ptr, "NULL", 4) == 0) ||
-             (input_ptr + 3 < input_end && strncasecmp((const char*)input_ptr, "TRUE", 4) == 0) ||
-             (input_ptr + 4 < input_end && strncasecmp((const char*)input_ptr, "FALSE", 5) == 0)))
-        {
-            bool preceded_by_is_or_is_not = false;
-            const unsigned char *ptr = output_ptr - 1;
-            char *tokens[2] = {NULL, NULL};
-            size_t token_lens[2] = {0,0};
-            int t = 0;
+        // Boolean / NULL / TRUE / FALSE
+        if (!inside_backtick_identifier) {
+            size_t token_len = 0;
+            bool is_special_literal = false;
 
-            // Collect last two significant tokens
-            while (t < 2 && ptr >= output_buffer) {
-                while (ptr >= output_buffer && isspace(*ptr)) {
-                    ptr--;
-                }
-
-                if (ptr < output_buffer) {
-                    break;
-                }
-
-                if (*ptr == '`' || *ptr == '.' || *ptr == '(' || *ptr == ')' || *ptr == ',') {
-                    ptr--;
-                    continue;
-                }
-
-                const unsigned char *word_end = ptr;
-
-                while (ptr >= output_buffer && (isalnum(*ptr) || *ptr == '_')) {
-                    ptr--;
-                }
-
-                size_t len = word_end - ptr;
-
-                if (len > 0) {
-                    tokens[t] = (char*)(ptr + 1);
-                    token_lens[t] = len;
-                    t++;
-                }
+            if (input_ptr + 3 < input_end && strncasecmp((const char*)input_ptr, "NULL", 4) == 0) {
+                token_len = 4; is_special_literal = true;
+            } else if (input_ptr + 3 < input_end && strncasecmp((const char*)input_ptr, "TRUE", 4) == 0) {
+                token_len = 4; is_special_literal = true;
+            } else if (input_ptr + 4 < input_end && strncasecmp((const char*)input_ptr, "FALSE", 5) == 0) {
+                token_len = 5; is_special_literal = true;
             }
 
-            if (t >= 1 && token_lens[0] == 2 && strncasecmp(tokens[0], "IS", 2) == 0) {
-                preceded_by_is_or_is_not = true;
+            if (is_special_literal) {
+                bool preserve_literal = false;
+
+                // Look behind in output buffer for IS / NOT
+                const unsigned char *prev = output_ptr;
+                while (prev > output_buffer && isspace(*(prev-1))) prev--;
+
+                if (prev >= output_buffer + 2 &&
+                        strncasecmp((char*)(prev-2), "IS", 2) == 0) {
+                    preserve_literal = true; // IS NULL / TRUE / FALSE
+                } else if (prev >= output_buffer + 3 &&
+                        strncasecmp((char*)(prev-3), "NOT", 3) == 0) {
+                    preserve_literal = true; // NOT NULL / TRUE / FALSE
+                } else {
+                    // Check for column definition context: look behind for a type keyword, skipping optional (size)
+                    const unsigned char *scan = prev;
+
+                    // Skip whitespace
+                    while (scan > output_buffer && isspace(*(scan-1))) {
+                        scan--;
+                    }
+
+                    // Skip trailing size specifier in parentheses, e.g., (10)
+                    if (scan > output_buffer && *(scan-1) == ')') {
+                        int paren_count = 1;
+                        scan--;
+
+                        while (scan > output_buffer && paren_count > 0) {
+                            if (*(scan-1) == ')') {
+                                paren_count++;
+                            }
+                            else if (*(scan-1) == '(') {
+                                paren_count--;
+                            }
+
+                            scan--;
+                        }
+
+                        // skip whitespace before type
+                        while (scan > output_buffer && isspace(*(scan-1))) {
+                            scan--;
+                        }
+                    }
+
+                    // Now check for common types
+                    if (scan > output_buffer) {
+                        const char *types[] = {
+                            "CHAR", "VARCHAR", "TEXT", "LONGTEXT", "BINARY", "VARBINARY",
+                            "TINYINT", "SMALLINT", "MEDIUMINT", "INT", "INTEGER", "BIGINT",
+                            "DECIMAL", "NUMERIC", "FLOAT", "DOUBLE", "DATE", "DATETIME",
+                            "TIMESTAMP", "TIME", "YEAR"
+                        };
+                        size_t ntypes = sizeof(types)/sizeof(types[0]);
+                        for (size_t i=0; i<ntypes; i++) {
+                            size_t tlen = strlen(types[i]);
+
+                            if (scan >= output_buffer + tlen &&
+                                    strncasecmp((char*)(scan-tlen), types[i], tlen) == 0) {
+                                preserve_literal = true; // part of column definition
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (preserve_literal) {
+                    for (size_t i = 0; i < token_len; i++) {
+                        *output_ptr++ = *input_ptr++;
+                    }
+                } else {
+                    *output_ptr++ = '?';
+                    input_ptr += token_len;
+                }
+
+                continue;
             }
-            else if (t >= 2 &&
-                     token_lens[1] == 2 && strncasecmp(tokens[1], "IS", 2) == 0 &&
-                     token_lens[0] == 3 && strncasecmp(tokens[0], "NOT", 3) == 0) {
-                preceded_by_is_or_is_not = true;
-            }
-
-            if (preceded_by_is_or_is_not) {
-                // Copy token literally
-                size_t token_len = 0;
-                if (strncasecmp((const char*)input_ptr, "NULL", 4) == 0) {
-                    token_len = 4;
-                }
-                else if (strncasecmp((const char*)input_ptr, "TRUE", 4) == 0) {
-                    token_len = 4;
-                }
-                else if (strncasecmp((const char*)input_ptr, "FALSE", 5) == 0) {
-                    token_len = 5;
-                }
-
-                for (size_t i = 0; i < token_len; i++) {
-                    *output_ptr++ = *input_ptr++;
-                }
-            } else {
-                *output_ptr++ = '?';
-
-                while (input_ptr < input_end && (isalnum(*input_ptr) || *input_ptr == '_')) {
-                    input_ptr++;
-                }
-            }
-
-            continue;
         }
 
         // Default copy
